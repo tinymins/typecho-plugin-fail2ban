@@ -1,0 +1,83 @@
+# Fail2ban 插件
+
+Fail2ban 插件为 Typecho 提供面向恶意流量的自动化封禁管控能力，通过可配置规则实时识别可疑请求并执行阻断。
+
+## 功能特性
+
+- 使用通配符或正则表达式描述匹配模式，适配常见扫描与绕过行为。
+- 为每条规则定义检测窗口、触发阈值与封禁时长，支持继承全局默认值。
+- 支持自定义拒绝响应内容（HTML），为禁止访问场景提供定制提示。
+- 将命中明细写入日志表，在后台面板集中展示当前封禁与历史事件。
+
+## 安装与升级
+
+1. 获取插件源码并放置至 Typecho `usr/plugins/Fail2ban` 目录。
+2. 检查运行环境具备数据库写权限且 PHP 版本满足要求。
+3. 登录 Typecho 后台，在“插件管理”中启用 **Fail2ban**，初次启用会自动初始化所需数据表。
+
+> 如曾手动调整相关数据表，建议先备份数据库再执行升级或重新启用。
+
+## 启用与配置
+
+1. 后台 → 插件管理中启用 **Fail2ban**。
+1. 在“设置 → 插件 → Fail2ban”配置核心参数。
+
+  **规则集合**：每行 `模式|窗口(分钟)|阈值(次数)|封禁时长(分钟)`，`regex:` 前缀启用正则匹配。
+
+  **默认窗口 / 阈值 / 时长**：作为规则缺省值。
+
+  **白名单**：逐行填写 IP 或 CIDR，命中后直接放行。
+
+  **拒绝响应**：自定义 403 页面，支持 HTML。
+
+  **停用清理策略**：决定停用插件时是否删除数据表。
+
+1. 在“控制台 → Fail2ban 防护”面板查看实时封禁与日志，可执行手动解封与过期清理。
+
+## 使用建议
+
+- 规则按顺序评估，命中阈值后立即封禁；推荐先定义高确定性的匹配，降低误封。
+- 与实际访问日志（如 Nginx/Apache）联动迭代规则，必要时使用正则捕捉变异路径。
+- 部署于 CDN 或反向代理后端时，确认客户端真实 IP 已通过 `X-Forwarded-For` 等头部正确回源。
+
+## 截图
+
+- 设置界面：![Fail2ban 设置界面](https://github.com/user-attachments/assets/7131db74-af89-4369-9b4e-b45870afd679)
+- 面板界面：![Fail2ban 面板](https://github.com/user-attachments/assets/8dda4b51-b2a4-4efd-a76a-23d018014ddc)
+- 拒绝响应：![Fail2ban 拒绝访问示例](https://github.com/user-attachments/assets/c82f7de0-675c-4625-a7a7-a876b9ab5dde)
+
+## 常见问题
+
+- **规则未生效？** 检查模式语法是否正确，必要时在日志面板确认命中记录。
+- **静态资源被误封？** 调整规则顺序或为合法路径增加白名单。
+- **需要强制解封？** 在管理面板选择目标 IP 执行“解除封禁”或清理过期记录。
+
+## 附注
+
+- 与 Access 插件共存时，调整 Access 代码可以实现自动跳过已封禁 IP 的访问统计写入。
+
+> Access_Core.php
+
+```php
+...
+    public function writeLogs($archive = null, $url = null, $content_id = null, $meta_id = null)
+    {
+        if ($this->isAdmin()) {
+            return;
+        }
+        if ($url == null) {
+            $url = $this->request->getServer('REQUEST_URI');
+        }
+        $ip = $this->request->getIp();
+        if ($this->isBlockIp($ip)) {
+            return;
+        }
+        // 插入 Fail2ban 封禁判断
+        if ($ip && class_exists('\TypechoPlugin\Fail2ban\Guard') && \TypechoPlugin\Fail2ban\Guard::isIpBanned($ip)) {
+            return;
+        }
+        if(!empty($ip)) {
+...
+```
+
+如需反馈问题或提交增强建议，请在代码托管仓库创建 Issue。
