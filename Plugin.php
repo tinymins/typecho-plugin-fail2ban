@@ -18,6 +18,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 
 require_once __DIR__ . '/Guard.php';
 require_once __DIR__ . '/Action.php';
+require_once __DIR__ . '/Api.php';
 
 /**
  * Fail2ban 风格的防护插件，为 Typecho 按规则封禁恶意请求。
