@@ -54,30 +54,6 @@ Fail2ban 插件为 Typecho 提供面向恶意流量的自动化封禁管控能�
 
 ## 附注
 
-- 与 Access 插件共存时，调整 Access 代码可以实现自动跳过已封禁 IP 的访问统计写入。
-
-> Access_Core.php
-
-```php
-...
-    public function writeLogs($archive = null, $url = null, $content_id = null, $meta_id = null)
-    {
-        if ($this->isAdmin()) {
-            return;
-        }
-        if ($url == null) {
-            $url = $this->request->getServer('REQUEST_URI');
-        }
-        $ip = $this->request->getIp();
-        if ($this->isBlockIp($ip)) {
-            return;
-        }
-        // 插入 Fail2ban 封禁判断
-        if ($ip && class_exists('\TypechoPlugin\Fail2ban\Guard') && \TypechoPlugin\Fail2ban\Guard::isIpBanned($ip)) {
-            return;
-        }
-        if(!empty($ip)) {
-...
-```
+- 与 Access 插件共存时，最新版 Access 将自动跳过已封禁 IP 的访问统计写入。
 
 如需反馈问题或提交增强建议，请在代码托管仓库创建 Issue。
