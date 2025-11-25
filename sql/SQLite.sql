@@ -42,3 +42,9 @@ CREATE TABLE "typecho_fail2ban_logs" (
 );
 CREATE INDEX "typecho_fail2ban_logs_created" ON "typecho_fail2ban_logs" ("created_at");
 CREATE INDEX "typecho_fail2ban_logs_ip" ON "typecho_fail2ban_logs" ("ip");
+
+CREATE TABLE "typecho_fail2ban_config" (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "config" TEXT NOT NULL,
+  "updated_at" INTEGER NOT NULL DEFAULT 0
+);

@@ -57,6 +57,8 @@ class Migration
             }
         }
 
+        self::ensureConfigTable($db, $adapter, $prefix);
+
         self::$schemaChecked = true;
     }
 
@@ -71,6 +73,42 @@ class Migration
             return $content === false ? null : $content;
         }
         return null;
+    }
+
+    private static function ensureConfigTable(Db $db, string $adapter, string $prefix): void
+    {
+        if (self::tableExists($db, 'fail2ban_config')) {
+            return;
+        }
+
+        $sql = null;
+        if (stripos($adapter, 'Mysql') !== false) {
+            $sql = sprintf(
+                'CREATE TABLE `%sfail2ban_config` (
+                    `id` int unsigned NOT NULL AUTO_INCREMENT,
+                    `config` longtext NOT NULL,
+                    `updated_at` int unsigned NOT NULL DEFAULT 0,
+                    PRIMARY KEY (`id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4',
+                $prefix
+            );
+        } elseif (stripos($adapter, 'SQLite') !== false) {
+            $sql = sprintf(
+                'CREATE TABLE "%sfail2ban_config" (
+                    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+                    "config" TEXT NOT NULL,
+                    "updated_at" INTEGER NOT NULL DEFAULT 0
+                )',
+                $prefix
+            );
+        }
+
+        if ($sql !== null) {
+            try {
+                $db->query($sql);
+            } catch (\Exception $e) {
+            }
+        }
     }
 
     private static function tableExists(Db $db, string $table): bool
@@ -116,6 +154,67 @@ class Migration
                 continue;
             }
             $db->query($statement);
+        }
+    }
+
+    public static function backupConfig(array $config): void
+    {
+        $db = Db::get();
+        $adapter = $db->getAdapterName();
+        $prefix = $db->getPrefix();
+
+        self::ensureConfigTable($db, $adapter, $prefix);
+
+        try {
+            $db->query($db->delete('table.fail2ban_config'));
+            $db->query(
+                $db->insert('table.fail2ban_config')->rows([
+                    'id' => 1,
+                    'config' => serialize($config),
+                    'updated_at' => time()
+                ])
+            );
+        } catch (\Exception $e) {
+        }
+    }
+
+    public static function getBackupConfig(): ?array
+    {
+        $db = Db::get();
+        $adapter = $db->getAdapterName();
+        $prefix = $db->getPrefix();
+
+        self::ensureConfigTable($db, $adapter, $prefix);
+
+        try {
+            $backup = $db->fetchRow(
+                $db->select()
+                    ->from('table.fail2ban_config')
+                    ->order('updated_at', Db::SORT_DESC)
+                    ->limit(1)
+            );
+        } catch (\Exception $e) {
+            return null;
+        }
+
+        if (empty($backup) || empty($backup['config'])) {
+            return null;
+        }
+
+        $settings = @unserialize($backup['config']);
+        if (!is_array($settings)) {
+            return null;
+        }
+
+        return $settings;
+    }
+
+    public static function clearConfigBackup(): void
+    {
+        $db = Db::get();
+        try {
+            $db->query($db->delete('table.fail2ban_config'));
+        } catch (\Exception $e) {
         }
     }
 }

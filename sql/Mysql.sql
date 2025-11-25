@@ -45,3 +45,10 @@ CREATE TABLE `typecho_fail2ban_logs` (
   KEY `created_at` (`created_at`),
   KEY `ip` (`ip`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `typecho_fail2ban_config` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `config` longtext NOT NULL,
+  `updated_at` int unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -44,17 +44,46 @@ class Plugin implements PluginInterface
 
     public static function deactivate(): void
     {
+        $config = [];
+        try {
+            $configObj = Helper::options()->plugin('Fail2ban');
+            if ($configObj instanceof \Typecho\Config) {
+                $config = $configObj->toArray();
+            }
+        } catch (\Typecho\Plugin\Exception $e) {
+        }
+        $shouldDrop = isset($config['dropOnDeactivate']) && $config['dropOnDeactivate'] === '1';
+
+        if (!$shouldDrop && !empty($config)) {
+            Migration::backupConfig($config);
+        }
+
         Helper::removeAction(self::$action);
         Helper::removePanel(1, self::$panel);
 
-        $config = Helper::options()->plugin('Fail2ban');
-        if (!empty($config->dropOnDeactivate) && $config->dropOnDeactivate === '1') {
+        if ($shouldDrop) {
+            Migration::clearConfigBackup();
             self::dropTables();
         }
     }
 
     public static function config(Form $form): void
     {
+        $configValues = [];
+        try {
+            $existingConfig = Helper::options()->plugin('Fail2ban');
+            if ($existingConfig instanceof \Typecho\Config) {
+                $configValues = $existingConfig->toArray();
+            }
+        } catch (\Typecho\Plugin\Exception $e) {
+        }
+        if (empty($configValues)) {
+            $backup = Migration::getBackupConfig();
+            if (is_array($backup)) {
+                $configValues = $backup;
+            }
+        }
+
         $enabled = new Radio('enabled', [
             '1' => _t('开启'),
             '0' => _t('关闭'),
@@ -93,6 +122,15 @@ class Plugin implements PluginInterface
         $form->addInput($whitelist);
         $form->addInput($denyMessage);
         $form->addInput($drop);
+
+        if (!empty($configValues)) {
+            foreach ($configValues as $key => $value) {
+                $input = $form->getInput($key);
+                if ($input) {
+                    $input->value($value);
+                }
+            }
+        }
     }
 
     public static function personalConfig(Form $form): void
@@ -124,7 +162,7 @@ class Plugin implements PluginInterface
     private static function dropTables(): void
     {
         $db = Db::get();
-        foreach (['fail2ban_hits', 'fail2ban_bans', 'fail2ban_logs'] as $table) {
+        foreach (['fail2ban_hits', 'fail2ban_bans', 'fail2ban_logs', 'fail2ban_config'] as $table) {
             try {
                 $db->query(sprintf('DROP TABLE IF EXISTS `%s%s`', $db->getPrefix(), $table));
             } catch (\Exception $e) {
