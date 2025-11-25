@@ -30,6 +30,7 @@ try {
 }
 
 $banLogs = [];
+$banUserAgents = [];
 if (!empty($activeBans)) {
     $ips = array_unique(array_map(static fn($ban) => $ban['ip'], $activeBans));
     try {
@@ -43,6 +44,14 @@ if (!empty($activeBans)) {
             $ip = $row['ip'];
             if (!isset($banLogs[$ip])) {
                 $banLogs[$ip] = [];
+            }
+            $logUserAgent = isset($row['user_agent']) ? trim((string) $row['user_agent']) : '';
+            if ($logUserAgent === '') {
+                $logUserAgent = null;
+            }
+
+            if (!isset($banUserAgents[$ip]) && $logUserAgent !== null) {
+                $banUserAgents[$ip] = $logUserAgent;
             }
             if (count($banLogs[$ip]) >= 5) {
                 continue;
@@ -59,7 +68,8 @@ if (!empty($activeBans)) {
             if (!$duplicate) {
                 $banLogs[$ip][] = [
                     'path' => $path,
-                    'time' => $timestamp
+                    'time' => $timestamp,
+                    'user_agent' => $logUserAgent
                 ];
             }
         }
@@ -125,10 +135,11 @@ $timezoneOffset = $options->timezone - $options->serverTimezone;
                                 <?php
                                     $expires = new Date((int) $ban['expires_at']);
                                     $lastDetected = new Date((int) $ban['last_detected']);
+                                    $ipUserAgent = isset($banUserAgents[$ban['ip']]) ? $banUserAgents[$ban['ip']] : null;
                                 ?>
                                 <tr>
                                     <td>
-                                        <strong><?php echo htmlspecialchars($ban['ip']); ?></strong><br>
+                                        <strong<?php if (!empty($ipUserAgent)): ?> title="<?php echo htmlspecialchars($ipUserAgent, ENT_QUOTES, 'UTF-8'); ?>"<?php endif; ?>><?php echo htmlspecialchars($ban['ip']); ?></strong><br>
                                         <small><?php _e('最后检测：%s', $lastDetected->format('Y-m-d H:i:s')); ?></small><br>
                                         <small><?php _e('解除时间：%s', $expires->format('Y-m-d H:i:s')); ?></small><br>
                                         <small><?php _e('封禁时长：%d 分钟', max(1, (int) $ban['ban_length'])); ?></small>

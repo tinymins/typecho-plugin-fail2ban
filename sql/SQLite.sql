@@ -37,7 +37,8 @@ CREATE TABLE "typecho_fail2ban_logs" (
   "rule_hash" TEXT NOT NULL,
   "hits" INTEGER NOT NULL DEFAULT 0,
   "created_at" INTEGER NOT NULL DEFAULT 0,
-  "message" TEXT NOT NULL
+  "message" TEXT NOT NULL,
+  "user_agent" TEXT
 );
 CREATE INDEX "typecho_fail2ban_logs_created" ON "typecho_fail2ban_logs" ("created_at");
 CREATE INDEX "typecho_fail2ban_logs_ip" ON "typecho_fail2ban_logs" ("ip");

@@ -5,7 +5,6 @@ namespace TypechoPlugin\Fail2ban;
 use Typecho\Db;
 use Typecho\Plugin as TypechoPlugin;
 use Typecho\Plugin\PluginInterface;
-use Typecho\Plugin\Exception as PluginException;
 use Typecho\Widget\Helper\Form;
 use Typecho\Widget\Helper\Form\Element\Radio;
 use Typecho\Widget\Helper\Form\Element\Textarea;
@@ -16,6 +15,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
     exit;
 }
 
+require_once __DIR__ . '/Migration.php';
 require_once __DIR__ . '/Guard.php';
 require_once __DIR__ . '/Action.php';
 require_once __DIR__ . '/Api.php';
@@ -118,25 +118,7 @@ class Plugin implements PluginInterface
 
     private static function install(): void
     {
-        $db = Db::get();
-        $adapterName = $db->getAdapterName();
-        $prefix = $db->getPrefix();
-
-        if (self::tableExists($db, 'fail2ban_hits')) {
-            return;
-        }
-
-        if (stripos($adapterName, 'Mysql') !== false) {
-            $scripts = file_get_contents(__DIR__ . '/sql/Mysql.sql');
-            $scripts = str_replace('typecho_', $prefix, $scripts);
-            self::runSqlScripts($db, $scripts);
-        } elseif (stripos($adapterName, 'SQLite') !== false) {
-            $scripts = file_get_contents(__DIR__ . '/sql/SQLite.sql');
-            $scripts = str_replace('typecho_', $prefix, $scripts);
-            self::runSqlScripts($db, $scripts);
-        } else {
-            throw new PluginException(_t('Fail2ban 暂不支持当前数据库适配器: %s', $adapterName));
-        }
+        Migration::install();
     }
 
     private static function dropTables(): void
@@ -150,24 +132,4 @@ class Plugin implements PluginInterface
         }
     }
 
-    private static function tableExists(Db $db, string $table): bool
-    {
-        try {
-            $db->fetchRow($db->select()->from('table.' . $table)->limit(1));
-            return true;
-        } catch (\Exception $e) {
-            return false;
-        }
-    }
-
-    private static function runSqlScripts(Db $db, string $script): void
-    {
-        $statements = array_filter(array_map('trim', explode(';', $script)));
-        foreach ($statements as $statement) {
-            if ($statement === '') {
-                continue;
-            }
-            $db->query($statement);
-        }
-    }
 }

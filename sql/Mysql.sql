@@ -40,6 +40,7 @@ CREATE TABLE `typecho_fail2ban_logs` (
   `hits` int unsigned NOT NULL DEFAULT 0,
   `created_at` int unsigned NOT NULL DEFAULT 0,
   `message` varchar(255) NOT NULL,
+  `user_agent` text,
   PRIMARY KEY (`id`),
   KEY `created_at` (`created_at`),
   KEY `ip` (`ip`)

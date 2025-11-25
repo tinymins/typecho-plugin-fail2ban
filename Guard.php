@@ -399,6 +399,14 @@ class Guard
 
     private function writeLog(string $ip, string $path, array $rule, int $hits, int $now, string $message): void
     {
+        $agent = $this->request->getAgent();
+        if ($agent !== null) {
+            $agent = trim($agent);
+            if ($agent === '') {
+                $agent = null;
+            }
+        }
+
         try {
             $this->db->query(
                 $this->db->insert('table.fail2ban_logs')->rows([
@@ -408,7 +416,8 @@ class Guard
                     'rule_hash' => $rule['hash'],
                     'hits' => $hits,
                     'created_at' => $now,
-                    'message' => $message
+                    'message' => $message,
+                    'user_agent' => $agent
                 ])
             );
         } catch (Exception $e) {
