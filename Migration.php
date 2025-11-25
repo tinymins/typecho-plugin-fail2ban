@@ -40,26 +40,36 @@ class Migration
         $db = $db ?: Db::get();
         $adapter = $db->getAdapterName();
         $prefix = $db->getPrefix();
-        $table = $prefix . 'fail2ban_logs';
 
-        if (!self::columnExists($db, $adapter, $table, 'user_agent')) {
-            $sql = null;
-            if (stripos($adapter, 'Mysql') !== false) {
-                $sql = sprintf('ALTER TABLE `%s` ADD COLUMN `user_agent` text NULL', $table);
-            } elseif (stripos($adapter, 'SQLite') !== false) {
-                $sql = sprintf('ALTER TABLE "%s" ADD COLUMN "user_agent" TEXT', $table);
-            }
-            if ($sql !== null) {
-                try {
-                    $db->query($sql);
-                } catch (\Exception $e) {
-                }
-            }
-        }
-
-        self::ensureConfigTable($db, $adapter, $prefix);
+        self::upgrade_1_0_0_to_1_1_0($db, $adapter, $prefix);
+        self::upgrade_1_1_0_to_1_2_0($db, $adapter, $prefix);
 
         self::$schemaChecked = true;
+    }
+
+    private static function upgrade_1_0_0_to_1_1_0(Db $db, string $adapter, string $prefix): void
+    {
+        $table = $prefix . 'fail2ban_logs';
+
+        if (self::columnExists($db, $adapter, $table, 'user_agent')) {
+            return;
+        }
+
+        $sql = null;
+        if (stripos($adapter, 'Mysql') !== false) {
+            $sql = sprintf('ALTER TABLE `%s` ADD COLUMN `user_agent` text NULL', $table);
+        } elseif (stripos($adapter, 'SQLite') !== false) {
+            $sql = sprintf('ALTER TABLE "%s" ADD COLUMN "user_agent" TEXT', $table);
+        }
+
+        if ($sql === null) {
+            return;
+        }
+
+        try {
+            $db->query($sql);
+        } catch (\Exception $e) {
+        }
     }
 
     private static function schemaScript(string $adapter): ?string
@@ -75,7 +85,7 @@ class Migration
         return null;
     }
 
-    private static function ensureConfigTable(Db $db, string $adapter, string $prefix): void
+    private static function upgrade_1_1_0_to_1_2_0(Db $db, string $adapter, string $prefix): void
     {
         if (self::tableExists($db, 'fail2ban_config')) {
             return;
@@ -160,11 +170,6 @@ class Migration
     public static function backupConfig(array $config): void
     {
         $db = Db::get();
-        $adapter = $db->getAdapterName();
-        $prefix = $db->getPrefix();
-
-        self::ensureConfigTable($db, $adapter, $prefix);
-
         try {
             $db->query($db->delete('table.fail2ban_config'));
             $db->query(
@@ -181,11 +186,6 @@ class Migration
     public static function getBackupConfig(): ?array
     {
         $db = Db::get();
-        $adapter = $db->getAdapterName();
-        $prefix = $db->getPrefix();
-
-        self::ensureConfigTable($db, $adapter, $prefix);
-
         try {
             $backup = $db->fetchRow(
                 $db->select()
