@@ -25,7 +25,7 @@ require_once __DIR__ . '/Api.php';
  *
  * @package Fail2ban
  * @author 茗伊
- * @version 1.0.0
+ * @version 1.2.0
  * @link https://zhaiyiming.com/
  */
 class Plugin implements PluginInterface
