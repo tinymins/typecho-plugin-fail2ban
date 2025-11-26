@@ -58,13 +58,15 @@ class Guard
 
         $now = $this->now();
 
-        if ($this->isBanned($ip, $now)) {
-            $this->deny();
+        $path = $this->request->getRequestUri();
+        if ($path === null) {
             return;
         }
 
-        $path = $this->request->getRequestUri();
-        if ($path === null) {
+        $activeBan = self::queryActiveBan($this->db, $ip, $now);
+        if ($activeBan !== null) {
+            $this->refreshActiveBan($activeBan, $path, $now);
+            $this->deny();
             return;
         }
 
@@ -151,11 +153,42 @@ class Guard
         return (int) ($options->gmtTime + ($options->timezone - $options->serverTimezone));
     }
 
-    private function isBanned(string $ip, int $now): bool
+    private function refreshActiveBan(array $ban, string $path, int $now): void
+    {
+        $banLength = isset($ban['ban_length']) ? max(1, (int) $ban['ban_length']) : max(1, (int) $this->options->banMinutes);
+        $expiresAt = $now + $banLength * 60;
+        $hits = isset($ban['hits']) ? max(0, (int) $ban['hits']) + 1 : 1;
+
+        try {
+            $this->db->query(
+                $this->db->update('table.fail2ban_bans')
+                    ->rows([
+                        'last_detected' => $now,
+                        'expires_at' => $expiresAt,
+                        'hits' => $hits
+                    ])
+                    ->where('id = ?', $ban['id'])
+            );
+        } catch (Exception $e) {
+        }
+
+        $rule = [
+            'pattern' => $ban['rule_pattern'],
+            'hash' => $ban['rule_hash'],
+            'threshold' => isset($ban['threshold']) ? (int) $ban['threshold'] : 0,
+            'window' => isset($ban['window_size']) ? (int) $ban['window_size'] : 0,
+            'ban' => $banLength
+        ];
+
+        $message = sprintf('Access denied for banned IP via rule %s', $ban['rule_pattern']);
+        $this->writeLog($ban['ip'], $path, $rule, $hits, $now, $message);
+    }
+
+    private static function queryActiveBan(Db $db, string $ip, int $now): ?array
     {
         try {
-            $ban = $this->db->fetchRow(
-                $this->db->select()
+            $ban = $db->fetchRow(
+                $db->select()
                     ->from('table.fail2ban_bans')
                     ->where('ip = ?', $ip)
                     ->where('active = ?', 1)
@@ -163,26 +196,26 @@ class Guard
                     ->limit(1)
             );
         } catch (Exception $e) {
-            return false;
+            return null;
         }
 
         if (empty($ban)) {
-            return false;
+            return null;
         }
 
         if ((int) $ban['expires_at'] <= $now) {
             try {
-                $this->db->query(
-                    $this->db->update('table.fail2ban_bans')
+                $db->query(
+                    $db->update('table.fail2ban_bans')
                         ->rows(['active' => 0])
                         ->where('id = ?', $ban['id'])
                 );
             } catch (Exception $e) {
             }
-            return false;
+            return null;
         }
 
-        return true;
+        return $ban;
     }
 
     private function parseRules(): array
@@ -450,17 +483,9 @@ class Guard
             $db = Db::get();
             $options = Helper::options();
             $now = (int) ($options->gmtTime + ($options->timezone - $options->serverTimezone));
+            $ban = self::queryActiveBan($db, $ip, $now);
 
-            $row = $db->fetchRow(
-                $db->select()
-                    ->from('table.fail2ban_bans')
-                    ->where('ip = ?', $ip)
-                    ->where('active = ?', 1)
-                    ->where('expires_at > ?', $now)
-                    ->limit(1)
-            );
-
-            return $cache[$ip] = !empty($row);
+            return $cache[$ip] = ($ban !== null);
         } catch (Exception $e) {
             return $cache[$ip] = false;
         }
