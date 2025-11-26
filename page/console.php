@@ -93,6 +93,56 @@ try {
 $options = Helper::options();
 $pluginConfig = $options->plugin('Fail2ban');
 $timezoneOffset = $options->timezone - $options->serverTimezone;
+$now = (int) ($options->gmtTime + $timezoneOffset);
+$since24Hours = max(0, $now - 86400);
+
+$stats = [
+    'activeIps' => !empty($activeBans) ? count($activeBans) : 0,
+    'ips24h' => 0,
+    'intercepts24h' => 0,
+    'totalIntercepts' => 0,
+    'totalIpsEver' => 0
+];
+$statsErrors = [];
+
+try {
+    $row = $db->fetchRow(
+        $db->select('COUNT(*) AS total_hits', 'COUNT(DISTINCT ip) AS unique_ips')
+            ->from('table.fail2ban_logs')
+            ->where('created_at >= ?', $since24Hours)
+    );
+    if ($row) {
+        if (isset($row['unique_ips'])) {
+            $stats['ips24h'] = (int) $row['unique_ips'];
+        }
+        if (isset($row['total_hits'])) {
+            $stats['intercepts24h'] = (int) $row['total_hits'];
+        }
+    }
+} catch (DbException $e) {
+    $statsErrors[] = $e->getMessage();
+}
+
+try {
+    $row = $db->fetchRow(
+        $db->select('COUNT(*) AS total_hits', 'COUNT(DISTINCT ip) AS unique_ips')
+            ->from('table.fail2ban_logs')
+    );
+    if ($row) {
+        if (isset($row['unique_ips'])) {
+            $stats['totalIpsEver'] = (int) $row['unique_ips'];
+        }
+        if (isset($row['total_hits'])) {
+            $stats['totalIntercepts'] = (int) $row['total_hits'];
+        }
+    }
+} catch (DbException $e) {
+    $statsErrors[] = $e->getMessage();
+}
+
+if (!empty($statsErrors)) {
+    $statsErrors = array_values(array_unique($statsErrors));
+}
 ?>
 <div class="main">
     <div class="body container">
@@ -106,6 +156,16 @@ $timezoneOffset = $options->timezone - $options->serverTimezone;
                     intval($pluginConfig->windowMinutes ?: 5),
                     intval($pluginConfig->thresholdHits ?: 5),
                     intval($pluginConfig->banMinutes ?: 60)
+                ); ?></p>
+                <?php if (!empty($statsErrors)): ?>
+                    <p class="error"><?php echo htmlspecialchars(implode('; ', $statsErrors)); ?></p>
+                <?php endif; ?>
+                <p><?php _e('封禁统计：当前封禁 IP %d 个；24 小时内封禁 IP %d 个，拦截访问 %d 次；累计拦截访问 %d 次，累计封禁 IP %d 个。',
+                    (int) $stats['activeIps'],
+                    (int) $stats['ips24h'],
+                    (int) $stats['intercepts24h'],
+                    (int) $stats['totalIntercepts'],
+                    (int) $stats['totalIpsEver']
                 ); ?></p>
             </div>
             <div class="col-mb-12">

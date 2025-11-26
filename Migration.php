@@ -43,6 +43,7 @@ class Migration
 
         self::upgrade_1_0_0_to_1_1_0($db, $adapter, $prefix);
         self::upgrade_1_1_0_to_1_2_0($db, $adapter, $prefix);
+        self::upgrade_1_2_0_to_1_3_0($db, $adapter, $prefix);
 
         self::$schemaChecked = true;
     }
@@ -111,6 +112,30 @@ class Migration
                 )',
                 $prefix
             );
+        }
+
+        if ($sql !== null) {
+            try {
+                $db->query($sql);
+            } catch (\Exception $e) {
+            }
+        }
+    }
+
+    private static function upgrade_1_2_0_to_1_3_0(Db $db, string $adapter, string $prefix): void
+    {
+        $indexName = $prefix . 'fail2ban_logs_created_ip';
+        $table = $prefix . 'fail2ban_logs';
+
+        if (self::indexExists($db, $adapter, $table, $indexName)) {
+            return;
+        }
+
+        $sql = null;
+        if (stripos($adapter, 'Mysql') !== false) {
+            $sql = sprintf('ALTER TABLE `%s` ADD INDEX `%s` (`created_at`, `ip`)', $table, $indexName);
+        } elseif (stripos($adapter, 'SQLite') !== false) {
+            $sql = sprintf('CREATE INDEX IF NOT EXISTS "%s" ON "%s" ("created_at", "ip")', $indexName, $table);
         }
 
         if ($sql !== null) {
@@ -216,5 +241,30 @@ class Migration
             $db->query($db->delete('table.fail2ban_config'));
         } catch (\Exception $e) {
         }
+    }
+
+    private static function indexExists(Db $db, string $adapter, string $table, string $index): bool
+    {
+        try {
+            if (stripos($adapter, 'Mysql') !== false) {
+                $sql = sprintf("SHOW INDEX FROM `%s` WHERE Key_name = '%s'", $table, $index);
+                $result = $db->query($sql, Db::READ);
+                $row = $db->fetchRow($result);
+                return !empty($row);
+            }
+            if (stripos($adapter, 'SQLite') !== false) {
+                $sql = sprintf("PRAGMA index_list('%s')", $table);
+                $result = $db->query($sql, Db::READ);
+                while ($row = $db->fetchRow($result)) {
+                    if (isset($row['name']) && strtolower((string) $row['name']) === strtolower($index)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        } catch (\Exception $e) {
+            return false;
+        }
+        return false;
     }
 }

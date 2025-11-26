@@ -43,7 +43,8 @@ CREATE TABLE `typecho_fail2ban_logs` (
   `user_agent` text,
   PRIMARY KEY (`id`),
   KEY `created_at` (`created_at`),
-  KEY `ip` (`ip`)
+  KEY `ip` (`ip`),
+  KEY `typecho_fail2ban_logs_created_ip` (`created_at`, `ip`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `typecho_fail2ban_config` (
